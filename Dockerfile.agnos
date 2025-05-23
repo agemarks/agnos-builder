@@ -108,10 +108,6 @@ COPY ./userspace/hardware_setup.sh /tmp/agnos
 RUN /tmp/agnos/hardware_setup.sh
 RUN mv /data/persist /system/ && rm -rf /data/*
 
-COPY --from=agnos-compiler-libqmi /tmp/libqmi.deb /tmp/
-COPY --from=agnos-compiler-modemmanager /tmp/modemmanager.deb /tmp/
-COPY --from=agnos-compiler-lpac /tmp/lpac.deb /tmp/
-
 RUN cd /tmp && \
     apt-get update && \
     apt-get install -yq --no-install-recommends \
@@ -128,18 +124,12 @@ RUN cd /tmp && \
     libsystemd0 \
     polkitd \
     polkitd-pkla \
-    mobile-broadband-provider-info && \
-    apt-get -o Dpkg::Options::="--force-overwrite" install -yq ./libqmi.deb && \
-    apt-get -o Dpkg::Options::="--force-overwrite" install -yq ./modemmanager.deb && \
-    apt-get -o Dpkg::Options::="--force-overwrite" install -yq ./lpac.deb
+    mobile-broadband-provider-info
+
 
 # Pre-compiled capnp (must be before python install)
 COPY --from=agnos-compiler-capnp /tmp/capnproto.deb /tmp/capnproto.deb
 RUN cd /tmp && apt-get -o Dpkg::Options::="--force-overwrite" install -yq ./capnproto.deb
-
-# Use other pre-compiled packages
-COPY --from=agnos-compiler-ffmpeg /tmp/ffmpeg.deb /tmp/ffmpeg.deb
-RUN cd /tmp && apt-get -o Dpkg::Options::="--force-overwrite" install -yq ./ffmpeg.deb
 
 ARG XDG_DATA_HOME="/usr/local"
 
@@ -153,6 +143,18 @@ RUN source $XDG_DATA_HOME/venv/bin/activate && \
 # Install nice to haves
 COPY ./userspace/install_extras.sh /tmp/agnos/
 RUN /tmp/agnos/install_extras.sh
+
+COPY --from=agnos-compiler-libqmi /tmp/libqmi.deb /tmp/
+COPY --from=agnos-compiler-modemmanager /tmp/modemmanager.deb /tmp/
+COPY --from=agnos-compiler-lpac /tmp/lpac.deb /tmp/
+
+RUN cd /tmp && apt-get -o Dpkg::Options::="--force-overwrite" install -yq ./libqmi.deb && \
+    apt-get -o Dpkg::Options::="--force-overwrite" install -yq ./modemmanager.deb && \
+    apt-get -o Dpkg::Options::="--force-overwrite" install -yq ./lpac.deb
+
+# Use other pre-compiled packages
+COPY --from=agnos-compiler-ffmpeg /tmp/ffmpeg.deb /tmp/ffmpeg.deb
+RUN cd /tmp && apt-get -o Dpkg::Options::="--force-overwrite" install -yq ./ffmpeg.deb
 
 COPY --from=agnos-compiler-qtwayland5 /tmp/qtwayland5.deb /tmp/qtwayland5.deb
 RUN cd /tmp && apt-get -o Dpkg::Options::="--force-overwrite" install -yq --allow-downgrades ./qtwayland5.deb
@@ -241,13 +243,30 @@ COPY ./userspace/files/CAMERA_ICP.elf /usr/lib/firmware
 # Setup hostname resolution for our custom hostname
 RUN sed -i 's/hosts:          files dns myhostname/hosts:          files myhostname dns/g' /etc/nsswitch.conf
 
+# Clean up dev packages
+RUN apt-get remove -y --purge build-essential \
+    autoconf \
+    automake \
+    build-essential \
+    cmake \
+    cppcheck \
+    gcc-arm-none-eabi \
+    llvm-18 \
+    gcc-13-aarch64-linux-gnu \
+    cmake \
+    git \
+    git-lfs \
+    gdb \
+    && apt-get autoremove -y --purge \
+    && apt-get clean
+
 # TODO: move this to base_setup.sh or build gcc from source
 # Remove unused architectures & bins from arm-none-eabi
-RUN cd /usr/lib/gcc/arm-none-eabi/* && \
-    rm -rf arm/ && \
-    find thumb/ -maxdepth 1 -type d ! \( -name 'thumb' -o -name 'v7e-m+fp' -o -name 'v7e-m+dp' \) -exec rm -rf {} + && \
-    rm cc1plus g++-mapper-server && \
-    find /usr/bin -maxdepth 1 -type f -name 'arm-none-eabi-*' ! \( -name 'arm-none-eabi-gcc' -o -name 'arm-none-eabi-objcopy' -o -name 'arm-none-eabi-objdump' \) -delete
+# RUN cd /usr/lib/gcc/arm-none-eabi/* && \
+#     rm -rf arm/ && \
+#     find thumb/ -maxdepth 1 -type d ! \( -name 'thumb' -o -name 'v7e-m+fp' -o -name 'v7e-m+dp' \) -exec rm -rf {} + && \
+#     rm cc1plus g++-mapper-server && \
+#     find /usr/bin -maxdepth 1 -type f -name 'arm-none-eabi-*' ! \( -name 'arm-none-eabi-gcc' -o -name 'arm-none-eabi-objcopy' -o -name 'arm-none-eabi-objdump' \) -delete
 
 # keep this last
 RUN ldconfig

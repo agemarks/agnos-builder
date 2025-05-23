@@ -49,17 +49,6 @@ jobs:
           .ccache
         key: kernel-${{ steps.kernel-submodule.outputs.ref }}
 
-    - name: Build kernel
-      run: ./build_kernel.sh
-
-    - name: save ccache
-      uses: actions/cache/save@v4
-      if: always() && steps.restore-cache.outputs.cache-hit != 'true'
-      with:
-        path: |
-          .ccache
-        key: ${{ steps.restore-cache.outputs.cache-primary-key }}
-
     - name: Update VERSION
       if: github.event_name == 'pull_request'
       run: |
@@ -68,7 +57,15 @@ jobs:
     - name: Build system
       env:
         GIT_HASH: ${{ github.event.pull_request.head.sha }}
-      run: ./build_system.sh
+      run: ./build.sh
+
+    - name: save ccache
+      uses: actions/cache/save@v4
+      if: always() && steps.restore-cache.outputs.cache-hit != 'true'
+      with:
+        path: |
+          .ccache
+        key: ${{ steps.restore-cache.outputs.cache-primary-key }}
 
     - name: Statistics
       id: stats
